@@ -13,7 +13,7 @@ class Options:
 
     def parse_args(self):
         parser = argparse.ArgumentParser(description='Point2Mesh options')
-        parser.add_argument('--save-path', type=str, default='./checkpoints/guitar', help='path to save results to')
+        parser.add_argument('--save-path', type=str, help='path to save results to')
         parser.add_argument('--input-pc', type=str, default='./data/guitar.ply', help='input point cloud')
         parser.add_argument('--initial-mesh', type=str, default='./data/guitar_initmesh.obj', help='initial mesh')
         # HYPER PARAMETERS - RECONSTRUCTION
@@ -59,12 +59,12 @@ class Options:
 
         self.args = parser.parse_args()
 
-        if not os.path.exists(self.args.save_path):
-            os.makedirs(self.args.save_path)
+        # if not os.path.exists(self.args.save_path):
+        #     os.makedirs(self.args.save_path)
 
-        with open(f'{self.args.save_path}/opt.txt', '+w') as f:
-            for k, v in sorted(vars(self.args).items()):
-                f.write('%s: %s\n' % (str(k), str(v)))
+        # with open(f'{self.args.save_path}/opt.txt', '+w') as f:
+        #     for k, v in sorted(vars(self.args).items()):
+        #         f.write('%s: %s\n' % (str(k), str(v)))
 
     def get_num_parts(self, num_faces):
         lookup_num_parts = [1, 2, 4, 8]

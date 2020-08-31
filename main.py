@@ -3,6 +3,7 @@ import time
 import vtk
 from PyQt5.QtWidgets import *
 from PyQt5.QtCore import *
+from gui import IWindow
 from vtk.qt.QVTKRenderWindowInteractor import QVTKRenderWindowInteractor
 
 root = os.path.dirname(os.path.abspath(__file__))
@@ -19,7 +20,7 @@ from p2m.options import Options
 app = QApplication([])
 
 options = Options()
-opts = optiosn.args
+opts = options.args
 
 opts.input_pc = "./data/triceratops.ply"
 opts.initial_mesh = "./data/triceratops_initmesh.obj"
@@ -32,6 +33,7 @@ print('device: {}'.format(device))
 
 
 iren = QVTKRenderWindowInteractor()
+iren.SetInteractorStyle(vtk.vtkInteractorStyleTrackballCamera())
 # #Initilaize Renderer
 ren = vtk.vtkRenderer()
 renWin = iren.GetRenderWindow()
@@ -96,12 +98,9 @@ class Worker(QThread):
         return np.array(xyz), np.array(normal)
 
 
-    def run(self):
-        # mesh = Mesh(opts.initial_mesh, device=device, hold_history=True)
+    def run(self):        
         mesh = vtkMesh(self.initPoly, device=device, hold_history=True)
         
-
-
         # input point cloud
         input_xyz, input_normals = self.MakeInputData(self.targetPoly)
         # normalize point cloud based on initial mesh
@@ -228,10 +227,8 @@ if __name__ == "__main__":
     trainingWorker.backwarded.connect(test)
     trainingWorker.start()
 
-    window = QMainWindow()
-    window.setCentralWidget(QWidget())
-    window.centralWidget().setLayout(QVBoxLayout())
-    window.centralWidget().layout().addWidget(iren)
+    window = IWindow()
+    window.SetVTK(iren)
     window.show()
     sys.exit(app.exec_())
 
