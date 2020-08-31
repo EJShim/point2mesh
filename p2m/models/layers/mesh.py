@@ -1,7 +1,7 @@
 import torch
 import numpy as np
 from queue import Queue
-from utils import load_obj, load_polydata, export
+from p2m.utils import load_obj, load_polydata, export
 import copy
 from pathlib import Path
 import pickle
@@ -775,11 +775,13 @@ class vtkMesh:
         self.ve = new_ve
         self.__clean_history(groups, torch_mask)
 
-    def export(self, file):
+    def export(self):
         vs = self.vs.cpu().clone()
         vs -= self.translations[None, :]
         vs *= self.scale
-        export(file, vs, self.faces)
+
+        return vs
+
 
     def init_history(self):
         self.history_data = {

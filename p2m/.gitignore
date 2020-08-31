@@ -1,0 +1,6 @@
+.idea/*
+*.pyc
+data/
+checkpoints/
+.DS_Store
+**/temp/

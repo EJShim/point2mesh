@@ -2,7 +2,7 @@ import torch
 import numpy as np
 import os
 import uuid
-from options import MANIFOLD_DIR
+from p2m.options import MANIFOLD_DIR
 import glob
 import vtk
 
