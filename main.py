@@ -5,7 +5,7 @@ from PyQt5.QtWidgets import *
 from PyQt5.QtCore import *
 from gui import IWindow
 from vtk.qt.QVTKRenderWindowInteractor import QVTKRenderWindowInteractor
-
+import numpy as np
 root = os.path.dirname(os.path.abspath(__file__))
 
 
@@ -25,6 +25,7 @@ opts = options.args
 opts.input_pc = "./data/triceratops.ply"
 opts.initial_mesh = "./data/triceratops_initmesh.obj"
 opts.iterations = 6000
+opts.upsamp = 1000
 
 
 torch.manual_seed(opts.torch_seed)
@@ -77,6 +78,7 @@ def MakePointCloudActor(polydata):
 class Worker(QThread):
 
     backwarded = pyqtSignal(object)
+    upsampled = pyqtSignal(object)
 
     def __init__(self, initPoly, targetPoly):
         super().__init__()
@@ -151,6 +153,7 @@ class Worker(QThread):
             end_time = time.time()
 
             
+            UpdateGT(self.initPoly, mesh.export())
             obj = {
                 "vs" : mesh.export(),
                 "log" : f'iter: {i} out of: {opts.iterations}; loss: {loss.item():.4f};' f' sample count: {num_samples}; time: {end_time - start_time:.2f}' 
@@ -159,23 +162,47 @@ class Worker(QThread):
             self.backwarded.emit(obj)
 
 
-            # if (i > 0 and (i + 1) % opts.upsamp == 0):
-            #     mesh = part_mesh.main_mesh
-            #     num_faces = int(np.clip(len(mesh.faces) * 1.5, len(mesh.faces), opts.max_faces))
+            if (i > 0 and (i + 1) % opts.upsamp == 0):
+                mesh = part_mesh.main_mesh
+                num_faces = int(np.clip(len(mesh.faces) * 1.5, len(mesh.faces), opts.max_faces))
 
-            #     if num_faces > len(mesh.faces) or opts.manifold_always:
-            #         # up-sample mesh
-            #         mesh = utils.manifold_upsample(mesh, opts.save_path, Mesh,
-            #                                     num_faces=min(num_faces, opts.max_faces),
-            #                                     res=opts.manifold_res, simplify=True)
+                if num_faces > len(mesh.faces) or opts.manifold_always:
 
-            #         part_mesh = PartMesh(mesh, num_parts=options.get_num_parts(len(mesh.faces)), bfs_depth=opts.overlap)
-            #         print(f'upsampled to {len(mesh.faces)} faces; number of parts {part_mesh.n_submeshes}')
-            #         net, optimizer, rand_verts, scheduler = init_net(mesh, part_mesh, device, opts)
-            #         if i < opts.beamgap_iterations:
-            #             print('beamgap updated')
-            #             beamgap_loss.update_pm(part_mesh, input_xyz)
+                    self.initPoly = utils.vtk_upsample(self.initPoly )
+                    mesh = vtkMesh(self.initPoly, device=device, hold_history=True)                    
+                    
+                    part_mesh = PartMesh(mesh, num_parts=options.get_num_parts(len(mesh.faces)), bfs_depth=opts.overlap)
+                    print(f'upsampled to {len(mesh.faces)} faces; number of parts {part_mesh.n_submeshes}')
+                    net, optimizer, rand_verts, scheduler = init_net(mesh, part_mesh, device, opts)
+                    if i < opts.beamgap_iterations:
+                        print('beamgap updated')
+                        beamgap_loss.update_pm(part_mesh, input_xyz)
 
+                    self.upsampled.emit(self.initPoly)
+
+
+
+def MakeInitMesh(pcPoly):
+
+
+    sphereSource = vtk.vtkSphereSource()
+    sphereSource.SetCenter(targetPoly.GetCenter())
+    sphereSource.SetRadius(rad)
+    sphereSource.SetThetaResolution(40)
+    sphereSource.SetPhiResolution(40)
+    # sphereSource.Update()
+    
+    cleanPoly = vtk.vtkCleanPolyData()
+    cleanPoly.SetInputConnection(sphereSource.GetOutputPort())
+    cleanPoly.Update()
+    initMesh = cleanPoly.GetOutput()
+
+
+    print(initMesh.GetNumberOfPoints())
+    initMesh.GetPointData().RemoveArray("Normals")
+
+    
+    return initMesh
 
 
 if __name__ == "__main__":
@@ -192,17 +219,32 @@ if __name__ == "__main__":
 
     initMesh.GetPointData().RemoveArray("Normals")
 
+
+    # print(initMesh.GetNumberOfPoints())
+
+
+
+
     targetReader = vtk.vtkPLYReader()
     targetReader.SetFileName(os.path.join( opts.input_pc))
     targetReader.Update()
 
 
-    targetpoly = targetReader.GetOutput()
+    targetPoly = targetReader.GetOutput()
+
+    #Get Target Poly Radius
+    bounds = targetPoly.GetBounds()
+    x1 = np.array([bounds[0], bounds[2], bounds[4]])
+    x2 = np.array([bounds[1], bounds[3], bounds[5]])
+    rad = np.linalg.norm(x1-x2) / 4
     
+
+
+    # initMesh = MakeInitMesh(targetPoly)
     
 
     initMeshActor =  MakeInitMeshActor(initMesh)
-    pcActor = MakePointCloudActor(targetpoly)
+    pcActor = MakePointCloudActor(targetPoly)
 
     ren.AddActor(initMeshActor)
     ren.AddActor(pcActor)
@@ -219,12 +261,17 @@ if __name__ == "__main__":
 
     #Run Thread
     def test(obj):
-        UpdateGT(initMesh, obj["vs"])
+        # UpdateGT(initMesh, obj["vs"])
         logActor.SetInput(obj["log"])
         renWin.Render()
 
-    trainingWorker = Worker(initMesh, targetpoly)
+    def upsampled(polydata):
+        initMeshActor.GetMapper().SetInputData(polydata)
+        renWin.Render()
+
+    trainingWorker = Worker(initMesh, targetPoly)
     trainingWorker.backwarded.connect(test)
+    trainingWorker.upsampled.connect(upsampled)
     trainingWorker.start()
 
     window = IWindow()

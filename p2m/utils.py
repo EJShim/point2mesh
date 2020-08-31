@@ -6,6 +6,15 @@ from p2m.options import MANIFOLD_DIR
 import glob
 import vtk
 
+
+def vtk_upsample(polydata, num_faces = 2000, res=3000, simplify = True):
+    subdivision = vtk.vtkLinearSubdivisionFilter()
+    subdivision.SetInputData(polydata)
+    subdivision.Update()
+
+
+    return subdivision.GetOutput()
+
 def manifold_upsample(mesh, save_path, Mesh, num_faces=2000, res=3000, simplify=True):
     # export before upsample
     fname = os.path.join(save_path, 'recon_{}.obj'.format(len(mesh.faces)))
