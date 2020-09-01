@@ -42,6 +42,32 @@ renWin.AddRenderer(ren)
 
 
 
+def ASDF(polydata):
+    
+    glyph = vtk.vtkVertexGlyphFilter()
+    glyph.SetInputData(targetPoly)
+    glyph.Update()
+
+
+    sphereSource = vtk.vtkSphereSource()
+    sphereSource.SetRadius(10)
+    sphereSource.SetPhiResolution(100)
+    sphereSource.SetThetaResolution(100)
+    sphereSource.Update()
+
+
+    smoothFilter = vtk.vtkSmoothPolyDataFilter()
+    smoothFilter.SetInputConnection(0, sphereSource.GetOutputPort())
+    smoothFilter.SetInputData(1, glyph.GetOutput())
+    smoothFilter.Update()
+
+    convexHull = smoothFilter.GetOutput()
+
+
+
+    return convexHull
+
+
 
 
 def UpdateGT(polydata, vs):
@@ -63,8 +89,13 @@ def MakeInitMeshActor(polydata):
 
 def MakePointCloudActor(polydata):
 
+    bounds = polydata.GetBounds()
+    x1 = np.array([bounds[0], bounds[2], bounds[4]])
+    x2 = np.array([bounds[1], bounds[3], bounds[5]])
+    d = np.linalg.norm(x1-x2)
+
     mapper = vtk.vtkOpenGLSphereMapper()
-    mapper.SetRadius(.02)    
+    mapper.SetRadius(d/1000)    
     mapper.SetInputData(polydata)
 
 
@@ -212,6 +243,8 @@ if __name__ == "__main__":
     initReader.Update()
     initMesh = initReader.GetOutput()
 
+
+
     cleanPoly = vtk.vtkCleanPolyData()
     cleanPoly.SetInputData(initMesh)
     cleanPoly.Update()
@@ -229,9 +262,10 @@ if __name__ == "__main__":
     targetReader.SetFileName(os.path.join( opts.input_pc))
     targetReader.Update()
 
-
     targetPoly = targetReader.GetOutput()
 
+
+    # initMesh = ASDF(targetPoly)
     #Get Target Poly Radius
     bounds = targetPoly.GetBounds()
     x1 = np.array([bounds[0], bounds[2], bounds[4]])

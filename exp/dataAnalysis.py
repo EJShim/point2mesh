@@ -2,6 +2,8 @@ import sys, os
 root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 sys.path.insert(0,root) 
 import vtk
+from scipy.spatial import ConvexHull
+import numpy as np
 
 #Initilaize Renderer
 ren = vtk.vtkRenderer()
@@ -39,6 +41,63 @@ def MakePointCloudActor(polydata):
     actor.GetProperty().SetColor(.9, .4, .1)
 
     return actor
+def MakeConvexHull(polydata):
+    
+
+
+    #Convex Hull
+    nPoints = targetPoly.GetNumberOfPoints()
+
+    vs = []
+    for pid in range(nPoints):
+        vs.append(targetPoly.GetPoint(pid))
+    vs = np.array(vs)
+    print(vs.shape)
+    hull = ConvexHull(vs)
+
+    convexHull = vtk.vtkPolyData()
+    convexHull.SetPoints(targetPoly.GetPoints())
+    cells = vtk.vtkCellArray()
+    for s in hull.simplices:
+        triangle = vtk.vtkTriangle()
+        triangle.GetPointIds().SetId(0, s[0])
+        triangle.GetPointIds().SetId(1, s[1])
+        triangle.GetPointIds().SetId(2, s[2])
+        cells.InsertNextCell(triangle)
+    convexHull.SetPolys(cells)
+
+
+    cleaner = vtk.vtkCleanPolyData()
+    cleaner.SetInputData(convexHull)
+    cleaner.Update()
+    convexHull = cleaner.GetOutput()
+
+    return convexHull
+
+def ASDF(polydata):
+    
+    glyph = vtk.vtkVertexGlyphFilter()
+    glyph.SetInputData(targetPoly)
+    glyph.Update()
+
+
+    sphereSource = vtk.vtkSphereSource()
+    sphereSource.SetRadius(10)
+    sphereSource.SetPhiResolution(100)
+    sphereSource.SetThetaResolution(100)
+    sphereSource.Update()
+
+
+    smoothFilter = vtk.vtkSmoothPolyDataFilter()
+    smoothFilter.SetInputConnection(0, sphereSource.GetOutputPort())
+    smoothFilter.SetInputData(1, glyph.GetOutput())
+    smoothFilter.Update()
+
+    convexHull = smoothFilter.GetOutput()
+
+
+
+    return convexHull
 
 if __name__ == "__main__":
     
@@ -46,7 +105,7 @@ if __name__ == "__main__":
     data = sorted(os.listdir(os.path.join(root, "data")))
 
 
-    targetpoly = None
+    targetPoly = None
     initMesh = None
 
 
@@ -63,17 +122,20 @@ if __name__ == "__main__":
 
         polydata = reader.GetOutput()
 
-        if filename == "g.ply" : targetpoly = polydata
-        if filename == "g.obj" : initMesh = polydata
+        if filename == "triceratops.ply" : targetPoly = polydata
+        if filename == "triceratops_initmesh.obj" : initMesh = polydata
+
+    targetPoly.GetPointData().RemoveArray("Normals")
 
 
 
+    convexHull = ASDF(targetPoly)
 
     
-    targetActor = MakePointCloudActor(targetpoly)
-    initActor = MakeInitMeshActor(initMesh)
+    targetActor = MakePointCloudActor(targetPoly)
+    initActor = MakeInitMeshActor(convexHull)
 
-    
+
 
     ren.AddActor(targetActor)
     ren.AddActor(initActor)

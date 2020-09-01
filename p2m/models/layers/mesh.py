@@ -311,7 +311,7 @@ class Mesh:
 
     @staticmethod
     def from_tensor(mesh, vs, faces, gfmm=True):
-        mesh = Mesh(file=mesh.filename, vs=vs, faces=faces, device=mesh.device, hold_history=True, gfmm=gfmm)
+        mesh = Mesh(file="", vs=vs, faces=faces, device=mesh.device, hold_history=True, gfmm=gfmm)
         return mesh
 
     def submesh(self, vs_index):
@@ -516,7 +516,6 @@ class vtkMesh:
 
     def __init__(self, polydata, hold_history=False, device='cpu', gfmm=True):
         
-        self.filename = "asdf"
         self.vs = self.v_mask = self.edge_areas = None
         self.edges = self.gemm_edges = self.sides = None
         self.device = device
@@ -751,7 +750,7 @@ class vtkMesh:
         for v in vs:
             if edge_id not in self.ve[v]:
                 print(self.ve[v])
-                print(self.filename)
+                # print(self.filename)
             self.ve[v].remove(edge_id)
 
     def clean(self, edges_mask, groups):
@@ -812,7 +811,7 @@ class vtkMesh:
 
     @staticmethod
     def from_tensor(mesh, vs, faces, gfmm=True):
-        mesh = Mesh(file=mesh.filename, vs=vs, faces=faces, device=mesh.device, hold_history=True, gfmm=gfmm)
+        mesh = Mesh(file="", vs=vs, faces=faces, device=mesh.device, hold_history=True, gfmm=gfmm)
         return mesh
 
     def submesh(self, vs_index):
