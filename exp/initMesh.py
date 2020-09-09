@@ -148,9 +148,11 @@ def ASDF(polydata):
 
 
     smoothFilter = vtk.vtkSmoothPolyDataFilter()
-    smoothFilter.SetInputConnection(0, sphereSource.GetOutputPort())
+    smoothFilter.SetInputData(0, sphereSource.GetOutput())
     smoothFilter.SetInputData(1, glyph.GetOutput())    
     smoothFilter.Update()
+
+    return smoothFilter.GetOutput()
 
 
 
@@ -170,6 +172,55 @@ def ASDF(polydata):
 
 
     return convexHull
+
+def loadTemplateSphere(polydata = None):
+    reader = vtk.vtkSTLReader()
+    reader.SetFileName("./templatesphere.stl")
+    reader.Update()
+
+    result = reader.GetOutput()
+    
+    if polydata:
+        center = polydata.GetCenter()
+        bounds = polydata.GetBounds()
+
+        polyRange = np.array( [ bounds[1]-bounds[0], bounds[3]-bounds[2], bounds[5]-bounds[4] ])
+        scale = np.max(polyRange)/2
+        
+        transform = vtk.vtkTransform()
+        transform.Translate(center[0], center[1], center[2])
+        transform.Scale(polyRange[0], polyRange[1], polyRange[2])
+        transform.Update()
+
+        transformFilter = vtk.vtkTransformFilter()
+        transformFilter.SetInputData(result)
+        transformFilter.SetTransform(transform)
+        transformFilter.Update()
+
+        result = transformFilter.GetOutput()
+
+
+            
+        glyph = vtk.vtkVertexGlyphFilter()
+        glyph.SetInputData(polydata)
+        glyph.Update()
+
+
+
+        smoothFilter = vtk.vtkSmoothPolyDataFilter()
+        smoothFilter.SetInputData(0, result)
+        smoothFilter.SetInputData(1, glyph.GetOutput())    
+        smoothFilter.Update()
+
+        smoothFilter2 = vtk.vtkSmoothPolyDataFilter()
+        smoothFilter2.SetInputData(0, result)
+        smoothFilter2.SetInputData(1, smoothFilter.GetOutput())
+        smoothFilter2.SetRelaxationFactor(1)
+        smoothFilter2.Update()
+
+        result = smoothFilter2.GetOutput()
+    
+    return result
 
 if __name__ == "__main__":
     
@@ -197,18 +248,28 @@ if __name__ == "__main__":
         if filename == "triceratops.ply" : targetPoly = polydata
         if filename == "triceratops_initmesh.obj" : initMesh = polydata
 
+
+
     targetPoly.GetPointData().RemoveArray("Normals")
 
 
+    initMesh = loadTemplateSphere(targetPoly)
 
-    convexHull = ASDF(targetPoly)
-    
+    print(initMesh.GetNumberOfPoints(), initMesh.GetNumberOfCells())
+
+    cleaner = vtk.vtkCleanPolyData()
+    cleaner.SetInputData(initMesh)
+    cleaner.Update()
+    initMesh = cleaner.GetOutput()
+
+    print(initMesh.GetNumberOfPoints(), initMesh.GetNumberOfCells())
 
 
     targetActor = MakePointCloudActor(targetPoly)
-    initActor = MakeInitMeshActor(convexHull)
-    # initActor.GetProperty().SetColor(0, 0, 1)
-
+    initActor = MakeInitMeshActor(initMesh)
+    
+    
+    
 
 
     ren.AddActor(targetActor)

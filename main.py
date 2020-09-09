@@ -6,6 +6,7 @@ from PyQt5.QtCore import *
 from gui import IWindow
 from vtk.qt.QVTKRenderWindowInteractor import QVTKRenderWindowInteractor
 import numpy as np
+from pymanifold import CalculateManifold
 root = os.path.dirname(os.path.abspath(__file__))
 
 
@@ -22,10 +23,11 @@ app = QApplication([])
 options = Options()
 opts = options.args
 
-opts.input_pc = "./data/triceratops.ply"
-opts.initial_mesh = "./data/triceratops_initmesh.obj"
+opts.input_pc = "./data/sample1.vtp"
+opts.initial_mesh = "./data/manifold.obj"
 opts.iterations = 6000
 opts.upsamp = 1000
+opts.lr = 1.1e-5
 
 
 torch.manual_seed(opts.torch_seed)
@@ -42,30 +44,30 @@ renWin.AddRenderer(ren)
 
 
 
-def ASDF(polydata):
+# def ASDF(polydata):
     
-    glyph = vtk.vtkVertexGlyphFilter()
-    glyph.SetInputData(targetPoly)
-    glyph.Update()
+#     glyph = vtk.vtkVertexGlyphFilter()
+#     glyph.SetInputData(targetPoly)
+#     glyph.Update()
 
 
-    sphereSource = vtk.vtkSphereSource()
-    sphereSource.SetRadius(10)
-    sphereSource.SetPhiResolution(100)
-    sphereSource.SetThetaResolution(100)
-    sphereSource.Update()
+#     sphereSource = vtk.vtkSphereSource()
+#     sphereSource.SetRadius(10)
+#     sphereSource.SetPhiResolution(100)
+#     sphereSource.SetThetaResolution(100)
+#     sphereSource.Update()
 
 
-    smoothFilter = vtk.vtkSmoothPolyDataFilter()
-    smoothFilter.SetInputConnection(0, sphereSource.GetOutputPort())
-    smoothFilter.SetInputData(1, glyph.GetOutput())
-    smoothFilter.Update()
+#     smoothFilter = vtk.vtkSmoothPolyDataFilter()
+#     smoothFilter.SetInputConnection(0, sphereSource.GetOutputPort())
+#     smoothFilter.SetInputData(1, glyph.GetOutput())
+#     smoothFilter.Update()
 
-    convexHull = smoothFilter.GetOutput()
+#     convexHull = smoothFilter.GetOutput()
 
 
 
-    return convexHull
+#     return convexHull
 
 
 
@@ -131,7 +133,8 @@ class Worker(QThread):
         return np.array(xyz), np.array(normal)
 
 
-    def run(self):        
+    def run(self):
+          
         mesh = vtkMesh(self.initPoly, device=device, hold_history=True)
         
         # input point cloud
@@ -199,7 +202,7 @@ class Worker(QThread):
 
                 if num_faces > len(mesh.faces) or opts.manifold_always:
 
-                    self.initPoly = utils.vtk_upsample(self.initPoly )
+                    self.initPoly = utils.vtk_upsample(self.initPoly , res=num_faces)
                     mesh = vtkMesh(self.initPoly, device=device, hold_history=True)                    
                     
                     part_mesh = PartMesh(mesh, num_parts=options.get_num_parts(len(mesh.faces)), bfs_depth=opts.overlap)
@@ -212,6 +215,55 @@ class Worker(QThread):
                     self.upsampled.emit(self.initPoly)
 
 
+
+def loadTemplateSphere(polydata = None):
+    reader = vtk.vtkSTLReader()
+    reader.SetFileName("./exp/templatesphere.stl")
+    reader.Update()
+
+    result = reader.GetOutput()
+    
+    if polydata:
+        center = polydata.GetCenter()
+        bounds = polydata.GetBounds()
+
+        polyRange = np.array( [ bounds[1]-bounds[0], bounds[3]-bounds[2], bounds[5]-bounds[4] ])
+        scale = np.max(polyRange)/2
+        
+        transform = vtk.vtkTransform()
+        transform.Translate(center[0], center[1], center[2])
+        transform.Scale(polyRange[0], polyRange[1], polyRange[2])
+        transform.Update()
+
+        transformFilter = vtk.vtkTransformFilter()
+        transformFilter.SetInputData(result)
+        transformFilter.SetTransform(transform)
+        transformFilter.Update()
+
+        result = transformFilter.GetOutput()
+
+
+            
+        glyph = vtk.vtkVertexGlyphFilter()
+        glyph.SetInputData(polydata)
+        glyph.Update()
+
+
+
+        smoothFilter = vtk.vtkSmoothPolyDataFilter()
+        smoothFilter.SetInputData(0, result)
+        smoothFilter.SetInputData(1, glyph.GetOutput())
+        smoothFilter.Update()
+
+        smoothFilter2 = vtk.vtkSmoothPolyDataFilter()
+        smoothFilter2.SetInputData(0, result)
+        smoothFilter2.SetInputData(1, smoothFilter.GetOutput())
+        smoothFilter2.SetRelaxationFactor(1)
+        smoothFilter2.Update()
+
+        result = smoothFilter2.GetOutput()
+    
+    return result
 
 def MakeInitMesh(pcPoly):
 
@@ -238,32 +290,37 @@ def MakeInitMesh(pcPoly):
 
 if __name__ == "__main__":
 
-    initReader = vtk.vtkOBJReader()
-    initReader.SetFileName(os.path.join( opts.initial_mesh))
-    initReader.Update()
-    initMesh = initReader.GetOutput()
+    # initReader = vtk.vtkOBJReader()
+    # initReader.SetFileName(os.path.join( opts.initial_mesh))
+    # initReader.Update()
+    # initMesh = initReader.GetOutput()
 
+    # cleanPoly = vtk.vtkCleanPolyData()
+    # cleanPoly.SetInputData(initMesh)
+    # cleanPoly.Update()
+    # initMesh = cleanPoly.GetOutput()
 
-
-    cleanPoly = vtk.vtkCleanPolyData()
-    cleanPoly.SetInputData(initMesh)
-    cleanPoly.Update()
-    initMesh = cleanPoly.GetOutput()
-
-    initMesh.GetPointData().RemoveArray("Normals")
+    # initMesh.GetPointData().RemoveArray("Normals")
 
 
     # print(initMesh.GetNumberOfPoints())
 
 
 
+    if opts.input_pc[-3:] == "ply":
+        targetReader = vtk.vtkPLYReader()
+    elif opts.input_pc[-3:] == "vtp":
+        targetReader = vtk.vtkXMLPolyDataReader()
 
-    targetReader = vtk.vtkPLYReader()
     targetReader.SetFileName(os.path.join( opts.input_pc))
     targetReader.Update()
 
     targetPoly = targetReader.GetOutput()
-
+    if not targetPoly.GetPointData().GetNormals():
+        normalGenerator = vtk.vtkPolyDataNormals()
+        normalGenerator.SetInputData(targetReader.GetOutput())
+        normalGenerator.Update()
+        targetPoly = normalGenerator.GetOutput()
 
     # initMesh = ASDF(targetPoly)
     #Get Target Poly Radius
@@ -271,17 +328,21 @@ if __name__ == "__main__":
     x1 = np.array([bounds[0], bounds[2], bounds[4]])
     x2 = np.array([bounds[1], bounds[3], bounds[5]])
     rad = np.linalg.norm(x1-x2) / 4
+
+
+    #Calculate InitMesh
+    initMesh = CalculateManifold(targetPoly, 100)
     
 
 
-    # initMesh = MakeInitMesh(targetPoly)
+    # initMesh = loadTemplateSphere(targetPoly)
     
 
     initMeshActor =  MakeInitMeshActor(initMesh)
     pcActor = MakePointCloudActor(targetPoly)
 
     ren.AddActor(initMeshActor)
-    ren.AddActor(pcActor)
+    # ren.AddActor(pcActor)
 
     logActor = vtk.vtkTextActor()
     logActor.SetInput("Log")

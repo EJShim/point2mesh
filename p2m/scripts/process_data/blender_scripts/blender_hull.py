@@ -43,7 +43,7 @@ class Process:
         bpy.context.view_layer.objects.active = mesh
         mod = mesh.modifiers.new(name='Decimate', type='DECIMATE')
         bpy.context.object.modifiers['Decimate'].use_collapse_triangulate = True
-        #
+        #ww
         nfaces = len(mesh.data.polygons)
         print('nfaces: ', len(mesh.data.polygons))
         if nfaces < target_faces:
