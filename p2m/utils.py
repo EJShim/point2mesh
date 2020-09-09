@@ -3,7 +3,7 @@ import numpy as np
 import os
 import uuid
 from p2m.options import MANIFOLD_DIR
-from pymanifold import CalculateManifold
+from pymanifold import CalculateManifold, Simplify
 import glob
 import vtk
 
@@ -12,7 +12,13 @@ def vtk_upsample(polydata, num_faces = 2000, res=3000, simplify = True):
     # subdivision = vtk.vtkLinearSubdivisionFilter()
     # subdivision.SetInputData(polydata)
     # subdivision.Update()
-    manifold = CalculateManifold(polydata, 3000)
+
+    print(res)
+    manifold = CalculateManifold(polydata, res)
+
+    if simplify:
+        print(num_faces)
+        manifold = Simplify(manifold, num_faces)
 
     return manifold
 

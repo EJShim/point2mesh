@@ -26,7 +26,8 @@ opts = options.args
 opts.input_pc = "./data/sample1.vtp"
 opts.initial_mesh = "./data/manifold.obj"
 opts.iterations = 6000
-opts.upsamp = 1000
+opts.upsamp = 200
+opts.max_faces = 50000
 opts.lr = 1.1e-5
 
 
@@ -202,7 +203,8 @@ class Worker(QThread):
 
                 if num_faces > len(mesh.faces) or opts.manifold_always:
 
-                    self.initPoly = utils.vtk_upsample(self.initPoly , res=num_faces)
+                    self.initPoly = utils.vtk_upsample(self.initPoly , num_faces=min(num_faces, opts.max_faces),
+                                                            res=10000)
                     mesh = vtkMesh(self.initPoly, device=device, hold_history=True)                    
                     
                     part_mesh = PartMesh(mesh, num_parts=options.get_num_parts(len(mesh.faces)), bfs_depth=opts.overlap)
